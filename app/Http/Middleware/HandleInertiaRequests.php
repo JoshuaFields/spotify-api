@@ -56,6 +56,10 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+            'spotify' => [
+                'clientId' => config('services.spotify.client_id'),
+                'redirectUri' => config('services.spotify.redirect_uri'),
+            ],
         ];
     }
 }

@@ -31,6 +31,10 @@ class SpotifyController extends Controller
             return redirect()->back()->with('results', $response->json());
         } else {
             Log::error('Spotify search API error', ['response' => $response->json()]);
+            if ($response->status() === 401) {
+                Storage::disk('local')->delete('spotify_tokens.json');
+                return redirect()->back()->with('error', 'Your Spotify session has expired. Please re-authorize the application.');
+            }
             return redirect()->back()->with('error', 'Failed to search Spotify. Please try again.');
         }
     }
@@ -64,25 +68,18 @@ class SpotifyController extends Controller
             return redirect()->back()->with('success', 'Track added to playlist.');
         } else {
             Log::error('Spotify add to playlist API error', ['response' => $response->json()]);
+            if ($response->status() === 401) {
+                Storage::disk('local')->delete('spotify_tokens.json');
+                return redirect()->back()->with('error', 'Your Spotify session has expired. Please re-authorize the application.');
+            }
             return redirect()->back()->with('error', 'Failed to add track to playlist. Please try again.');
         }
     }
 
     public function callback(Request $request)
     {
-        $response = Http::asForm()->post('https://accounts.spotify.com/api/token', [
-            'grant_type' => 'authorization_code',
-            'code' => $request->input('code'),
-            'redirect_uri' => config('services.spotify.redirect_uri'),
-            'client_id' => config('services.spotify.client_id'),
-            'client_secret' => config('services.spotify.client_secret'),
-        ]);
-
-        $tokens = $response->json();
-        $tokens['expires_at'] = time() + $tokens['expires_in'];
-        Storage::disk('local')->put('spotify_tokens.json', json_encode($tokens));
-
-        return 'Tokens stored.';
+        // This method will now just render a view that handles the postMessage to the opener
+        return view('spotify.callback');
     }
 
     private function getAccessToken()
