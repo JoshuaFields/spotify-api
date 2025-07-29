@@ -83,6 +83,7 @@ function handlePostMessage(event: MessageEvent) {
 </script>
 
 <template>
+    <Head title="Spotify Playground" />
     <AppLayout>
         <div class="container mx-auto py-12 px-4">
             <h1 class="text-4xl font-bold mb-8">Let's Make a Playlist</h1>
