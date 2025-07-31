@@ -8,9 +8,9 @@ Route::get('/', function () {
     return Inertia::render('Dashboard');
 })->name('home');
 
-Route::get('dashboard', function () {
-    return Inertia::render('Welcome');
-})->name('dashboard');
+// Route::get('dashboard', function () {
+//     return Inertia::render('Welcome');
+// })->name('dashboard');
 
 
 
