@@ -20,5 +20,4 @@ Route::get('spotify', function () {
 
 Route::post('spotify/search', [SpotifyController::class, 'search'])->name('spotify.search');
 Route::post('spotify/playlist/add', [SpotifyController::class, 'addToPlaylist'])->name('spotify.playlist.add');
-Route::get('spotify/callback', [SpotifyController::class, 'callback'])->name('spotify.callback');
-Route::get('spotify/callback', [SpotifyController::class, 'callback'])->name('spotify.callback');
+Route::post('spotify/callback', [SpotifyController::class, 'callback'])->name('spotify.callback');

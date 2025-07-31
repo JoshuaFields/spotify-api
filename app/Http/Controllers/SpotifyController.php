@@ -78,8 +78,28 @@ class SpotifyController extends Controller
 
     public function callback(Request $request)
     {
-        // This method will now just render a view that handles the postMessage to the opener
-        return view('spotify.callback');
+        $request->validate([
+            'code' => 'required|string',
+        ]);
+
+        $response = Http::asForm()->post('https://accounts.spotify.com/api/token', [
+            'grant_type' => 'authorization_code',
+            'code' => $request->input('code'),
+            'redirect_uri' => config('services.spotify.redirect_uri'),
+            'client_id' => config('services.spotify.client_id'),
+            'client_secret' => config('services.spotify.client_secret'),
+        ]);
+
+        if ($response->successful()) {
+            $tokens = $response->json();
+            $tokens['expires_at'] = time() + $tokens['expires_in'];
+            Storage::disk('local')->put('spotify_tokens.json', json_encode($tokens));
+
+            return redirect()->back()->with('success', 'Spotify authorized successfully!');
+        } else {
+            Log::error('Spotify token exchange failed', ['response' => $response->json()]);
+            return redirect()->back()->with('error', 'Failed to authorize Spotify. Please try again.');
+        }
     }
 
     private function getAccessToken()
