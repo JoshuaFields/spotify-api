@@ -64,7 +64,7 @@ function handlePostMessage(event: MessageEvent) {
 
     if (event.data.type === 'spotify-auth-code') {
         authForm.code = event.data.code
-        authForm.post(route('spotify.callback'), {
+        authForm.post(route('spotify.token'), {
             onSuccess: () => {
                 // Optionally, show a success message or refresh the page
                 // to reflect the new token status

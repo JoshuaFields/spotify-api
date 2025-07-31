@@ -15,9 +15,12 @@ class SpotifyController extends Controller
             'query' => 'required|string',
         ]);
 
+        Log::info('Search request received.', ['query' => $request->input('query')]);
+
         $token = $this->getAccessToken();
 
         if (!$token) {
+            Log::error('Search failed: No access token available.');
             return redirect()->back()->with('error', 'Spotify authorization required. Please re-authorize the application.');
         }
 
@@ -78,6 +81,11 @@ class SpotifyController extends Controller
 
     public function callback(Request $request)
     {
+        return view('spotify.callback');
+    }
+
+    public function token(Request $request)
+    {
         $request->validate([
             'code' => 'required|string',
         ]);
@@ -92,63 +100,85 @@ class SpotifyController extends Controller
 
         if ($response->successful()) {
             $tokens = $response->json();
+            Log::info('Spotify token exchange successful.', ['response' => $tokens]);
+
             $tokens['expires_at'] = time() + $tokens['expires_in'];
-            Storage::disk('local')->put('spotify_tokens.json', json_encode($tokens));
+            session([
+                'spotify_access_token' => $tokens['access_token'],
+                'spotify_refresh_token' => $tokens['refresh_token'],
+                'spotify_token_expires_at' => $tokens['expires_at'],
+            ]);
+
+            Log::info('Spotify tokens stored in session.');
 
             return redirect()->back()->with('success', 'Spotify authorized successfully!');
         } else {
             Log::error('Spotify token exchange failed', ['response' => $response->json()]);
-            return redirect()->back()->with('error', 'Failed to authorize Spotify. Please try again.');
+            return redirect()->route('spotify')->with('error', 'Failed to authorize Spotify. Please try again.');
         }
     }
 
     private function getAccessToken()
     {
-        if (!Storage::disk('local')->exists('spotify_tokens.json')) {
+        Log::info('getAccessToken called.');
+
+        if (!session()->has('spotify_access_token')) {
+            Log::warning('Spotify access token not found in session.');
             return null;
         }
 
-        $tokens = json_decode(Storage::disk('local')->get('spotify_tokens.json'), true);
+        Log::info('Spotify access token found in session.');
 
-        // Check if tokens are valid JSON and contain necessary keys
-        if (!is_array($tokens) || !isset($tokens['access_token']) || !isset($tokens['expires_at'])) {
-            Storage::disk('local')->delete('spotify_tokens.json'); // Delete invalid file
-            return null;
-        }
+        if (time() > session('spotify_token_expires_at')) {
+            Log::info('Spotify access token expired. Attempting to refresh.');
 
-        if (time() > $tokens['expires_at']) {
-            // Access token expired, try to refresh
-            if (!isset($tokens['refresh_token'])) {
-                Storage::disk('local')->delete('spotify_tokens.json'); // No refresh token, force re-auth
+            if (!session()->has('spotify_refresh_token')) {
+                Log::error('Spotify refresh token not found in session. Forcing re-authentication.');
+                session()->forget([
+                    'spotify_access_token',
+                    'spotify_refresh_token',
+                    'spotify_token_expires_at',
+                ]);
                 return null;
             }
 
             $response = Http::asForm()->post('https://accounts.spotify.com/api/token', [
                 'grant_type' => 'refresh_token',
-                'refresh_token' => $tokens['refresh_token'],
+                'refresh_token' => session('spotify_refresh_token'),
                 'client_id' => config('services.spotify.client_id'),
                 'client_secret' => config('services.spotify.client_secret'),
             ]);
 
             if ($response->successful()) {
                 $newTokens = $response->json();
+                Log::info('Spotify token refresh successful.', ['response' => $newTokens]);
+
                 $newTokens['expires_at'] = time() + $newTokens['expires_in'];
-                // Spotify might return a new refresh token, use it if available
+                
+                session([
+                    'spotify_access_token' => $newTokens['access_token'],
+                    'spotify_token_expires_at' => $newTokens['expires_at'],
+                ]);
+
                 if (isset($newTokens['refresh_token'])) {
-                    $newTokens['refresh_token'] = $newTokens['refresh_token'];
-                } else {
-                    $newTokens['refresh_token'] = $tokens['refresh_token']; // Keep old if new not provided
+                    session(['spotify_refresh_token' => $newTokens['refresh_token']]);
                 }
-                Storage::disk('local')->put('spotify_tokens.json', json_encode($newTokens));
+
+                Log::info('Refreshed Spotify tokens stored in session.');
+
                 return $newTokens['access_token'];
             } else {
-                // Refresh failed, likely invalid refresh token. Force re-authorization.
                 Log::error('Spotify token refresh failed', ['response' => $response->json()]);
-                Storage::disk('local')->delete('spotify_tokens.json');
+                session()->forget([
+                    'spotify_access_token',
+                    'spotify_refresh_token',
+                    'spotify_token_expires_at',
+                ]);
                 return null;
             }
         }
 
-        return $tokens['access_token'];
+        Log::info('Returning Spotify access token from session.');
+        return session('spotify_access_token');
     }
 }
